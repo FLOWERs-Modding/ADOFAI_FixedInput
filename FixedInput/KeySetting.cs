@@ -5,7 +5,7 @@ using UnityModManagerNet;
 
 namespace FixedInput
 {
-    public class Setting : UnityModManager.ModSettings
+    public class KeySetting : UnityModManager.ModSettings
     {
         public bool useKeyLimit = false;
         public List<int> registerKeys = new List<int>();

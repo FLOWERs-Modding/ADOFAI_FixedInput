@@ -4,7 +4,6 @@ using System.Reflection;
 using System.Threading;
 using HarmonyLib;
 using UnityEngine;
-using UnityModManagerNet;
 using static UnityModManagerNet.UnityModManager;
 
 namespace FixedInput
@@ -14,17 +13,25 @@ namespace FixedInput
         public static bool isEnabled, isRegistering = false;
         private static Harmony harmony;
         private static Dictionary<int, bool> maskedKey = new Dictionary<int, bool>();
-        public static Setting keySetting;
-
+        public static KeySetting KeyKeySetting;
+        public static Dictionary<int,string> StrangeKeys = new Dictionary<int, string>
+        {
+            {160,"LeftShift"}, //LeftShift
+            {161,"RightShift"}, //RightShift
+            {25,"RightControl"}, //RightControl
+            {21,"RightAlt"} //RightAlt
+        };
+        
         public static void Setup(ModEntry modEntry)
         {
             modEntry.OnToggle = OnToggle;
-            
-            keySetting = new Setting();
-            keySetting = ModSettings.Load<Setting>(modEntry);
+            KeyKeySetting = new KeySetting();
+            KeyKeySetting = ModSettings.Load<KeySetting>(modEntry);
             
             modEntry.OnGUI = OnGUI;
             modEntry.OnSaveGUI = OnSaveGUI;
+            modEntry.OnHideGUI = OnHideGUI;
+            
         }
         
         private static bool OnToggle(ModEntry modEntry, bool value)
@@ -43,15 +50,21 @@ namespace FixedInput
             return true;
         }
 
+        private static void OnHideGUI(ModEntry modEntry)
+        {
+            isRegistering = false;
+        }
+
         private static void OnGUI(ModEntry modEntry)
         {
+            if (Input.GetKeyDown(KeyCode.Escape)) isRegistering = false;
             
-            keySetting.useKeyLimit = GUILayout.Toggle(keySetting.useKeyLimit, RDString.language==SystemLanguage.Korean? "등록된 키만 사용하게 하기.":"Allow only registered keys to be used.");
+            KeyKeySetting.useKeyLimit = GUILayout.Toggle(KeyKeySetting.useKeyLimit, RDString.language==SystemLanguage.Korean? "등록된 키만 사용하게 하기.":"Allow only registered keys to be used.");
             
-            if (keySetting.useKeyLimit)
+            if (KeyKeySetting.useKeyLimit)
             {
                 var str = "";
-                foreach (var k in keySetting.registerKeys) str += (KeyCode)k+", ";
+                foreach (var k in KeyKeySetting.registerKeys) str += (StrangeKeys.ContainsKey(k)? StrangeKeys[k]:((KeyCode)k).ToString())+", ";
                 
                 GUILayout.Label("     "+str);
                 GUILayout.BeginHorizontal();
@@ -63,24 +76,46 @@ namespace FixedInput
 
                 if (isRegistering)
                 {
-                    foreach (var k in Enum.GetValues(typeof(KeyCode)))
+                    foreach (KeyCode k in Enum.GetValues(typeof(KeyCode)))
                     {
-                        if((KeyCode)k==KeyCode.MouseLeft||(KeyCode)k==KeyCode.MouseRight) continue;
+                        if(k==KeyCode.Mouse0||k==KeyCode.Mouse1||k==KeyCode.Escape||
+                           k==KeyCode.LeftShift||k==KeyCode.RightShift) continue;
                         if (!maskedKey.ContainsKey((int)k)) maskedKey[(int)k] = false;
-                        if ((InputPatch.GetAsyncKeyState((int) k) & 0x8000) > 0)
+                        
+                        if (Input.GetKeyDown(k))
                         {
                             if (!maskedKey[(int)k])
                             {
                                 maskedKey[(int) k] = true;
-                                if (!keySetting.registerKeys.Contains((int) k))
-                                    keySetting.registerKeys.Add((int) k);
+                                if (!KeyKeySetting.registerKeys.Contains((int) k))
+                                    KeyKeySetting.registerKeys.Add((int) k);
                                 else
-                                    keySetting.registerKeys.Remove((int) k);
+                                    KeyKeySetting.registerKeys.Remove((int) k);
                             }
                         }
                         else
                         {
                             maskedKey[(int) k] = false;
+                        }
+                    }
+
+                    foreach (var i in StrangeKeys.Keys)
+                    {
+                        if (!maskedKey.ContainsKey(i)) maskedKey[i] = false;
+                        if ((InputPatch.GetAsyncKeyState(i) & 0x8000) > 0)
+                        {
+                            if (!maskedKey[i])
+                            {
+                                maskedKey[i] = true;
+                                if (!KeyKeySetting.registerKeys.Contains(i))
+                                    KeyKeySetting.registerKeys.Add(i);
+                                else
+                                    KeyKeySetting.registerKeys.Remove(i);
+                            }
+                        }
+                        else
+                        {
+                            maskedKey[i] = false;
                         }
                     }
                 }
@@ -93,7 +128,7 @@ namespace FixedInput
 
         public static void OnSaveGUI(ModEntry modEntry)
         {
-            keySetting.Save(modEntry);
+            KeyKeySetting.Save(modEntry);
         }
 
     }
