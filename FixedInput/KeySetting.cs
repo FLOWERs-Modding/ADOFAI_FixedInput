@@ -8,6 +8,7 @@ namespace FixedInput
     public class KeySetting : UnityModManager.ModSettings
     {
         public bool useKeyLimit = false;
+        public bool useAsync = false;
         public List<int> registerKeys = new List<int>();
 
         public override void Save(UnityModManager.ModEntry modEntry) {

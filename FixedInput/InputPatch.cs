@@ -1,9 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using HarmonyLib;
+using MonsterLove.StateMachine;
 using UnityEngine;
 
 namespace FixedInput
@@ -11,116 +13,120 @@ namespace FixedInput
     
     public class InputPatch
     {
-        private static int[] StrangeKeys = {
-            160, //LeftShift
-            161, //RightShift
-            25, //RightControl
-            21 //RightAlt
-        };
+        
 
-        private static bool[] pressedKey2 =
+        [HarmonyPatch(typeof(scrController), "OnApplicationQuit")]
+        public static class OnExitThreadStopPatch
         {
-            false,
-            false,
-            false,
-            false
-        };
-        
+            public static void Postfix()
+            {
+                if(Main.KeyKeySetting.useAsync) AsyncInput.Stop();
+            }
+        }
 
-        [DllImport("user32.dll")]
-        public static extern short GetAsyncKeyState(int key);
+        [HarmonyPatch(typeof(scrController), "Awake")]
+        private static class ResetKeyInputPatch
+        {
+            public static void Postfix()
+            {
+                Clear();
+            }
+        }
         
+        [HarmonyPatch(typeof(scrController), "PlayerControl_Enter")]
+        private static class FirstHitTimingPatch
+        {
+            public static void Postfix()
+            {
+                Clear();
+
+                if (Main.KeyKeySetting.useAsync && scrController.isGameWorld)
+                {
+                    var f = scrController.instance.currFloor;
+                    if (f == null) return;
+                    if (f.nextfloor == null) return;
+                    AsyncInput.hitTimeFloor = scrConductor.instance.dspTimeSongPosZero + f.nextfloor.entryTimePitchAdj +
+                                              (scrConductor.currentPreset.inputOffset / 1000.0);
+                }
+            }
+        }
+
+        [HarmonyPatch(typeof(scrPlanet), "MoveToNextFloor")]
+        private static class SetAfterHitTimingPatch
+        {
+            public static void Prefix(scrFloor floor)
+            {
+                if (Main.KeyKeySetting.useAsync && scrController.isGameWorld && floor.nextfloor != null)
+                    AsyncInput.hitTimeFloor = scrConductor.instance.dspTimeSongPosZero +
+                                              floor.nextfloor.entryTimePitchAdj +
+                                              (scrConductor.currentPreset.inputOffset / 1000.0);
+            }
+        }
+
+        [HarmonyPatch(typeof(scrController), "PlayerControl_Update")]
+        private static class InputDetectUpdatePatch
+        {
+            public static void Postfix()
+            {
+                if (RDC.auto||AudioListener.pause||scrController.instance.isCLS || !scrController.isGameWorld) return;
+                
+                if (!Main.KeyKeySetting.useAsync)
+                {
+                    var kc = InputManager.GetKeyCount();
+                    if (kc > 0)
+                    {
+                        if (kc == 1) scrController.instance.consecMultipressCounter = 0;
+                        for (var n = 0; n < kc; n++)
+                            scrController.instance.keyTimes.Add(Time.timeAsDouble);
+                    }
+
+                }
+                else
+                {
+                    var multipress = AsyncInput.keyQueue.Count > 1;
+                    if (AsyncInput.keyQueue.Count == 1) scrController.instance.consecMultipressCounter = 0;
+                    while (AsyncInput.keyQueue.Any())
+                    {
+                        var refAngle = AsyncInput.keyQueue.Dequeue();
+                        var rad = (scrMisc.TimeToAngleInRad(refAngle,
+                            (float) ((double) scrConductor.instance.bpm * scrController.instance.speed),
+                            scrConductor.instance.song.pitch));
+                        
+                        
+                        scrController.instance.chosenplanet.angle = scrController.instance.chosenplanet.targetExitAngle - (rad * (scrController.instance.isCW? -1:1));
+                        if (multipress)
+                        {
+                            scrController.instance.chosenplanet.angle =
+                                (scrController.instance.currFloor.exitangle -
+                                 (rad * (scrController.instance.isCW ? -1 : 1)));
+                        }
+                        scrController.instance.Hit();
+
+                    }
+                }
+            }
+        }
+
 
         [HarmonyPatch(typeof(scrController), "CountValidKeysPressed")]
-        public class CountValidKeysPressed
+        public class DisableOriginalInputPatch
         {
             public static bool Prefix(ref int __result)
             {
-                
-                if (!Main.isEnabled) return true;
-                if (scrController.instance.isCLS) return true;
-                if (Input.GetKeyDown(KeyCode.BackQuote)) return true;
-
-                var num = 0;
-                
-                //마우스 입력 
-                for (var j = 323; j <= 329; j++)
-                {
-                    if (num > 4)
-                    {
-                        __result = 4;
-                        return false;
-                    } 
-                    
-                    if (Input.GetKeyDown((KeyCode)j)) num++;
-                }
-                
-                //키보드 입력 
-                for (var k = 0; k < 128; k++)
-                {
-                    if(Main.KeyKeySetting.useKeyLimit)
-                        if (!Main.KeyKeySetting.registerKeys.Contains(k) && scrController.instance.gameworld) continue;
-                    
-                    if (num > 4)
-                    {
-                        __result = 4;
-                        return false;
-                    }
-                    
-                    if (Input.GetKeyDown((KeyCode)k)) num++;
-                }
-                
-                //특수키 입력
-                for (var i = 256; i < 320; i++)
-                {
-                    if(Main.KeyKeySetting.useKeyLimit)
-                        if (!Main.KeyKeySetting.registerKeys.Contains(i) && scrController.instance.gameworld) continue;
-                    
-                    if (num > 4)
-                    {
-                        __result = 4;
-                        return false;
-                    }
-                    
-                    if((int)KeyCode.LeftShift==i||(int)KeyCode.RightShift==i) continue;
-                    if (Input.GetKeyDown((KeyCode)i)) num++;
-                }
-
-                //이상한 키들 ( 예 : 쉬프트, 알트 등등 )
-                if (!Application.isFocused) return true;
-                for(var n = 0; n < 4; n++)
-                {
-                    if(Main.KeyKeySetting.useKeyLimit)
-                        if (!Main.KeyKeySetting.registerKeys.Contains(n) && scrController.instance.gameworld) continue;
-                    
-                    if (num > 4)
-                    {
-                        __result = 4;
-                        return false;
-                    }
-                    
-                    if ((GetAsyncKeyState(StrangeKeys[n]) & 0x8000) > 0)
-                    {
-                        if (!pressedKey2[n])
-                        {
-                            num++;
-                            pressedKey2[n] = true;
-
-                        }
-                    }
-                    else
-                    {
-                        pressedKey2[n] = false;
-                    }
-                }
-                
-                __result = Mathf.Min(4, num);
+                if (RDC.auto||AudioListener.pause||scrController.instance.isCLS || !scrController.isGameWorld) return true;
+                __result = 0;
                 return false;
 
             }
-            
-            
         }
+        
+        private static void Clear()
+        {
+            AsyncInput.keyQueue.Clear();
+            InputManager.ClearMask();
+        }
+
+       
         
     }
 }
