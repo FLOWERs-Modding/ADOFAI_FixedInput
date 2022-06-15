@@ -29,7 +29,8 @@ namespace FixedInput
         {
             public static void Postfix()
             {
-                Clear();
+                AsyncInput.keyQueue.Clear();
+                InputManager.ClearMask();
             }
         }
         
@@ -38,7 +39,7 @@ namespace FixedInput
         {
             public static void Postfix()
             {
-                Clear();
+                AsyncInput.keyQueue.Clear();
 
                 if (Main.KeyKeySetting.useAsync && scrController.isGameWorld)
                 {
@@ -69,6 +70,13 @@ namespace FixedInput
             public static void Postfix()
             {
                 if (RDC.auto||AudioListener.pause||scrController.instance.isCLS || !scrController.isGameWorld) return;
+                //if (scrController.instance.currFloor?.prevfloor?.holdLength > -1 && scrController.instance.holding) return;
+                if (scrController.instance.currFloor?.holdLength > -1)
+                {
+                    AsyncInput.keyQueue.Clear();
+                    return;
+                }
+                //if (scrController.instance.currFloor?.nextfloor?.holdLength > -1) return;
                 
                 if (!Main.KeyKeySetting.useAsync)
                 {
@@ -83,7 +91,8 @@ namespace FixedInput
                 }
                 else
                 {
-                    var multipress = AsyncInput.keyQueue.Count > 1;
+
+                    var multipress = false;
                     if (AsyncInput.keyQueue.Count == 1) scrController.instance.consecMultipressCounter = 0;
                     while (AsyncInput.keyQueue.Any())
                     {
@@ -92,15 +101,18 @@ namespace FixedInput
                             (float) ((double) scrConductor.instance.bpm * scrController.instance.speed),
                             scrConductor.instance.song.pitch));
                         
-                        
+                       // Main.logger.Log("----------------");
                         scrController.instance.chosenplanet.angle = scrController.instance.chosenplanet.targetExitAngle - (rad * (scrController.instance.isCW? -1:1));
                         if (multipress)
                         {
                             scrController.instance.chosenplanet.angle =
                                 (scrController.instance.currFloor.exitangle -
                                  (rad * (scrController.instance.isCW ? -1 : 1)));
+                           // Main.logger.Log("multipress fix: "+scrController.instance.chosenplanet.angle+"\nexitAngle: "+scrController.instance.currFloor.exitangle+"\nrefAngle: "+refAngle+"\nrad: "+rad);
                         }
+         
                         scrController.instance.Hit();
+                        multipress = true;
 
                     }
                 }
@@ -113,18 +125,16 @@ namespace FixedInput
         {
             public static bool Prefix(ref int __result)
             {
+                if (scrController.isGameWorld && (scrController.States) scrController.instance.GetState() !=
+                    scrController.States.PlayerControl) return true;
                 if (RDC.auto||AudioListener.pause||scrController.instance.isCLS || !scrController.isGameWorld) return true;
+                //if (scrController.instance.currFloor?.holdLength > -1) return true;
+                if (scrController.instance.currFloor?.nextfloor.holdLength > -1) return true;
                 __result = 0;
                 return false;
-
             }
         }
         
-        private static void Clear()
-        {
-            AsyncInput.keyQueue.Clear();
-            InputManager.ClearMask();
-        }
 
        
         

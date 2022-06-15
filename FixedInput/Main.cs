@@ -109,7 +109,7 @@ namespace FixedInput
                 {
                     foreach (VirtualKeys k in Enum.GetValues(typeof(VirtualKeys)))
                     {
-                        if(k==VirtualKeys.LeftButton||k==VirtualKeys.RightButton||k==VirtualKeys.Escape) continue;
+                        if(k==VirtualKeys.LeftButton||k==VirtualKeys.RightButton||k==VirtualKeys.Escape||k==VirtualKeys.Control||k==VirtualKeys.Shift||k==VirtualKeys.Menu) continue;
                         if (!maskedKey.ContainsKey((int)k)) maskedKey[(int)k] = false;
                         
                         if ((InputManager.GetAsyncKeyState((int)k) & 0x8000) > 0)

@@ -68,7 +68,7 @@ namespace FixedInput
             {
                 var virKey = new byte[256];
                 GetKeyboardState(virKey);
-                for (var n = 0; n < 223; n++)
+                for (var n = 0; n < 256; n++)
                 {
                     
                     if(n==27) continue;
@@ -130,7 +130,7 @@ namespace FixedInput
             if (RDC.auto || AudioListener.pause) return result;
             if (!Main.KeyKeySetting.useKeyLimit)
             {
-                for (var n = 0; n < 223; n++)
+                for (var n = 0; n < 256; n++)
                 {
                     if(n==27) continue;
                     if (n >= 16 && n <= 18) continue;
