@@ -13,8 +13,9 @@ namespace FixedInput
     
     public class InputPatch
     {
-        
 
+
+        public static bool playStateIsWon = false;
         [HarmonyPatch(typeof(scrController), "OnApplicationQuit")]
         public static class OnExitThreadStopPatch
         {
@@ -29,6 +30,7 @@ namespace FixedInput
         {
             public static void Postfix()
             {
+                playStateIsWon = false;
                 AsyncInput.keyQueue.Clear();
                 InputManager.ClearMask();
             }
@@ -40,6 +42,7 @@ namespace FixedInput
             public static void Postfix()
             {
                 AsyncInput.keyQueue.Clear();
+                playStateIsWon = false;
 
                 if (Main.KeyKeySetting.useAsync && scrController.isGameWorld)
                 {
@@ -64,12 +67,23 @@ namespace FixedInput
             }
         }
 
+        [HarmonyPatch(typeof(scrController), "OnLandOnPortal")]
+        private static class PlanetEndPatch
+        {
+            public static void Prefix()
+            {
+                if (scrController.isGameWorld)
+                    playStateIsWon = true;
+            }
+        }
+
         [HarmonyPatch(typeof(scrController), "PlayerControl_Update")]
         private static class InputDetectUpdatePatch
         {
             public static void Postfix()
             {
                 if (RDC.auto||AudioListener.pause||scrController.instance.isCLS || !scrController.isGameWorld) return;
+                if (playStateIsWon) return;
                 //if (scrController.instance.currFloor?.prevfloor?.holdLength > -1 && scrController.instance.holding) return;
                 if (scrController.instance.currFloor?.holdLength > -1)
                 {
@@ -92,6 +106,7 @@ namespace FixedInput
                 else
                 {
 
+                    
                     var multipress = false;
                     if (AsyncInput.keyQueue.Count == 1) scrController.instance.consecMultipressCounter = 0;
                     while (AsyncInput.keyQueue.Any())
